@@ -6,12 +6,14 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "@/components/ui/use-toast"
-import { AlertCircle, User, Upload, X, MapPin } from "lucide-react"
+import { AlertCircle, User, Upload, X, MapPin, Bell, Lock } from "lucide-react"
 import Image from "next/image"
+import { BecomeSeller } from "./become-seller"
 
 const EVENT_CATEGORIES = [
   { id: "music", label: "Music" },
@@ -73,7 +75,7 @@ export default function SettingsPage() {
           displayName,
           phoneNumber,
         },
-        profilePicture
+        profilePicture,
       )
       toast({
         title: "Profile updated",
@@ -140,9 +142,7 @@ export default function SettingsPage() {
   }
 
   const toggleEventCategory = (category: string) => {
-    setEventCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
-    )
+    setEventCategories((prev) => (prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]))
   }
 
   return (
@@ -255,11 +255,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-                <Button
-                  type="submit"
-                  className="bg-tct-magenta hover:bg-tct-magenta/90"
-                  disabled={isUpdatingProfile}
-                >
+                <Button type="submit" className="bg-tct-magenta hover:bg-tct-magenta/90" disabled={isUpdatingProfile}>
                   {isUpdatingProfile ? "Updating..." : "Update Profile"}
                 </Button>
               </form>
@@ -323,4 +319,146 @@ export default function SettingsPage() {
                     <Input
                       id="zip"
                       value={zipCode}
-                      onChange={(e) => setZipCode(e.target.value\
+                      onChange={(e) => setZipCode(e.target.value)}
+                      placeholder="10001"
+                      className="bg-tct-navy/50 border-tct-cyan/30 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country</Label>
+                    <Input
+                      id="country"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      placeholder="United States"
+                      className="bg-tct-navy/50 border-tct-cyan/30 text-white"
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="bg-tct-magenta hover:bg-tct-magenta/90" disabled={isUpdatingAddress}>
+                  {isUpdatingAddress ? "Updating..." : "Update Address"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-4">
+          <Card className="bg-tct-navy/80 border border-tct-cyan/20 text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-tct-coral" />
+                Notification Preferences
+              </CardTitle>
+              <CardDescription>Manage how you receive notifications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {preferencesError && (
+                <div className="mb-4 p-3 rounded-md bg-red-900/20 border border-red-500 text-white flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+                  <p>{preferencesError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleUpdatePreferences} className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Communication Channels</h3>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="email-notifications">Email Notifications</Label>
+                      <p className="text-sm text-gray-400">Receive updates about your tickets and events</p>
+                    </div>
+                    <Switch
+                      id="email-notifications"
+                      checked={emailNotifications}
+                      onCheckedChange={setEmailNotifications}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sms-notifications">SMS Notifications</Label>
+                      <p className="text-sm text-gray-400">Receive text messages for important updates</p>
+                    </div>
+                    <Switch id="sms-notifications" checked={smsNotifications} onCheckedChange={setSmsNotifications} />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Event Categories</h3>
+                  <p className="text-sm text-gray-400">Select categories you're interested in</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EVENT_CATEGORIES.map((category) => (
+                      <div key={category.id} className="flex items-center space-x-2">
+                        <Switch
+                          id={`category-${category.id}`}
+                          checked={eventCategories.includes(category.id)}
+                          onCheckedChange={() => toggleEventCategory(category.id)}
+                        />
+                        <Label htmlFor={`category-${category.id}`}>{category.label}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="bg-tct-magenta hover:bg-tct-magenta/90"
+                  disabled={isUpdatingPreferences}
+                >
+                  {isUpdatingPreferences ? "Updating..." : "Update Preferences"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="seller" className="space-y-4">
+          <BecomeSeller />
+        </TabsContent>
+
+        <TabsContent value="account" className="space-y-4">
+          <Card className="bg-tct-navy/80 border border-tct-cyan/20 text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-tct-cyan" />
+                Security Settings
+              </CardTitle>
+              <CardDescription>Manage your account security</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <div className="flex items-center justify-between p-3 rounded-md bg-tct-navy/50 border border-tct-cyan/10">
+                  <span>••••••••</span>
+                  <Button variant="outline" size="sm">
+                    Change Password
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Two-Factor Authentication</Label>
+                <div className="flex items-center justify-between p-3 rounded-md bg-tct-navy/50 border border-tct-cyan/10">
+                  <span>Not enabled</span>
+                  <Button variant="outline" size="sm">
+                    Enable
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Delete Account</Label>
+                <div className="p-3 rounded-md bg-red-900/10 border border-red-500/20">
+                  <p className="text-sm text-gray-300 mb-2">
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                  </p>
+                  <Button variant="destructive" size="sm">
+                    Delete Account
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
