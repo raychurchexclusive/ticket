@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 69% 13%;
+    --foreground: 0 0% 98%;
+    --card: 240 69% 15%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 69% 13%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 296 81% 59%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 188 95% 53%;
+    --secondary-foreground: 240 69% 13%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 0 100% 71%;
+    --accent-foreground: 240 69% 13%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 296 81% 59%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-tct-navy text-foreground;
+  }
+}
+
+/* Custom styles for shadcn components */
+.bg-card {
+  @apply bg-tct-navy/80 border-tct-cyan/20;
+}
+
+.bg-popover {
+  @apply bg-tct-navy border-tct-cyan/20;
+}
+
+.bg-muted {
+  @apply bg-tct-navy/50;
+}
+
+.bg-accent {
+  @apply bg-tct-navy/30;
+}
+
+/* Dialog styles */
+[data-radix-popper-content-wrapper] {
+  background-color: transparent !important;
+}
+
+.Dialog,
+.DialogOverlay,
+.DialogContent {
+  @apply bg-tct-navy border-tct-cyan/20 text-white;
+}
+
+/* Input styles */
+input,
+textarea,
+select {
+  @apply bg-tct-navy/50 border-tct-cyan/30 text-white placeholder:text-gray-400;
+}
+
+/* Button styles */
+button[data-state="open"] {
+  @apply bg-tct-magenta text-white;
+}
+
+/* Dropdown styles */
+[role="menu"] {
+  @apply bg-tct-navy border-tct-cyan/20 text-white;
+}
+
+[role="menuitem"]:hover {
+  @apply bg-tct-navy/70;
+}
+
+/* Table styles */
+table {
+  @apply text-white;
+}
+
+/* Card styles */
+.card {
+  @apply bg-tct-navy/80 border-tct-cyan/20 text-white;
+}

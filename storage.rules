@@ -1,0 +1,53 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    function isSeller() {
+      return hasRole('seller') || isAdmin();
+    }
+    
+    // Profile pictures
+    match /profile_pictures/{userId}/{allPaths=**} {
+      allow read: if true; // Public read access
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Event images
+    match /event_images/{eventId}/{allPaths=**} {
+      allow read: if true; // Public read access
+      allow write: if isSeller() && (
+        // Check if the user is the event owner or an admin
+        firestore.get(/databases/(default)/documents/events/$(eventId)).data.sellerId == request.auth.uid || 
+        isAdmin()
+      );
+    }
+    
+    // Ticket attachments
+    match /ticket_attachments/{ticketId}/{allPaths=**} {
+      allow read: if isAuthenticated() && (
+        // Check if the user is the ticket owner, event seller, or an admin
+        firestore.get(/databases/(default)/documents/tickets/$(ticketId)).data.userId == request.auth.uid ||
+        isSeller() && firestore.get(/databases/(default)/documents/tickets/$(ticketId)).data.eventId in 
+          firestore.get(/databases/(default)/documents/events/$(firestore.get(/databases/(default)/documents/tickets/$(ticketId)).data.eventId)).data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
+  }
+}
