@@ -1,16 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Image from "next/image"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Calendar, MapPin, Share2, CalendarX } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { toast } from "@/components/ui/use-toast"
+import { Calendar, MapPin, ArrowRight } from "lucide-react"
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"
 
 interface Event {
   id: string
@@ -24,100 +21,41 @@ interface Event {
 
 export function EventCarousel() {
   const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Fetch events from Firestore
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const now = new Date()
+        setIsLoading(true)
         const eventsRef = collection(db, "events")
-        const eventsQuery = query(
-          eventsRef,
-          where("status", "==", "active"),
-          where("date", ">=", now.toISOString().split("T")[0]),
-          orderBy("date", "asc"),
-          limit(10),
-        )
+        const q = query(eventsRef, where("status", "==", "active"), orderBy("date", "asc"), limit(6))
 
-        const snapshot = await getDocs(eventsQuery)
+        const querySnapshot = await getDocs(q)
 
-        if (snapshot.empty) {
-          setEvents([])
-        } else {
-          const eventData = snapshot.docs.map((doc) => {
-            const data = doc.data()
-            return {
-              id: doc.id,
-              title: data.title,
-              date: data.date,
-              location: data.location,
-              image: data.image || "/placeholder.svg?height=200&width=400",
-              price: `$${data.price}`,
-              category: data.category,
-            }
+        const eventsData: Event[] = []
+        querySnapshot.forEach((doc) => {
+          const data = doc.data()
+          eventsData.push({
+            id: doc.id,
+            title: data.title,
+            date: data.date,
+            location: data.location,
+            image: data.image || "/placeholder.svg?height=200&width=400",
+            price: data.price,
+            category: data.category || "Event",
           })
-          setEvents(eventData)
-        }
+        })
+
+        setEvents(eventsData)
       } catch (error) {
         console.error("Error fetching events:", error)
       } finally {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
 
     fetchEvents()
   }, [])
-
-  const nextSlide = () => {
-    if (events.length === 0) return
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % events.length)
-  }
-
-  const prevSlide = () => {
-    if (events.length === 0) return
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + events.length) % events.length)
-  }
-
-  const shareEvent = async (event: Event) => {
-    const shareUrl = `${window.location.origin}/events/${event.id}`
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: event.title,
-          text: `Check out ${event.title} at ${event.location} on ${event.date}`,
-          url: shareUrl,
-        })
-      } catch (error) {
-        console.error("Error sharing:", error)
-      }
-    } else {
-      // Fallback for browsers that don't support the Web Share API
-      navigator.clipboard.writeText(shareUrl)
-      toast({
-        title: "Link copied!",
-        description: "Event link copied to clipboard",
-      })
-    }
-  }
-
-  // Auto-play functionality
-  useEffect(() => {
-    if (!isAutoPlaying || events.length === 0) return
-
-    const interval = setInterval(() => {
-      nextSlide()
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [currentIndex, isAutoPlaying, events.length])
-
-  // Pause auto-play on hover
-  const handleMouseEnter = () => setIsAutoPlaying(false)
-  const handleMouseLeave = () => setIsAutoPlaying(true)
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -134,159 +72,84 @@ export function EventCarousel() {
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="relative w-full max-w-md mx-auto">
-        <Card className="relative overflow-hidden border-2 border-tct-cyan/20 bg-tct-navy/80 shadow-xl">
-          <div className="h-48 w-full bg-tct-navy/50 animate-pulse"></div>
-          <CardContent className="p-4 text-white">
-            <div className="h-6 w-3/4 bg-tct-navy/50 animate-pulse mb-4"></div>
-            <div className="h-4 w-1/2 bg-tct-navy/50 animate-pulse mb-4"></div>
-            <div className="flex justify-between">
-              <div className="h-8 w-1/4 bg-tct-navy/50 animate-pulse"></div>
-              <div className="h-8 w-1/4 bg-tct-navy/50 animate-pulse"></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="bg-tct-navy/80 border border-tct-cyan/20 rounded-lg overflow-hidden shadow-lg animate-pulse"
+          >
+            <div className="h-48 bg-gray-700"></div>
+            <div className="p-5">
+              <div className="h-6 bg-gray-700 rounded w-3/4 mb-4"></div>
+              <div className="h-4 bg-gray-700 rounded w-full mb-2"></div>
+              <div className="h-4 bg-gray-700 rounded w-2/3 mb-4"></div>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="h-3 bg-gray-700 rounded w-12 mb-1"></div>
+                  <div className="h-5 bg-gray-700 rounded w-16"></div>
+                </div>
+                <div className="h-9 bg-gray-700 rounded w-28"></div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
     )
   }
 
   if (events.length === 0) {
     return (
-      <div className="relative w-full max-w-md mx-auto">
-        <div className="absolute -top-4 -left-4 w-72 h-72 bg-tct-magenta rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
-        <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-tct-cyan rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
-
-        <Card className="relative overflow-hidden border-2 border-tct-cyan/20 bg-tct-navy/80 shadow-xl">
-          <CardContent className="p-8 text-white flex flex-col items-center justify-center min-h-[250px]">
-            <CalendarX className="h-16 w-16 text-tct-magenta mb-4 opacity-70" />
-            <h3 className="text-xl font-bold text-center mb-2">No Events Scheduled</h3>
-            <p className="text-gray-300 text-center">Check back soon for upcoming events!</p>
-            <Button className="bg-tct-magenta hover:bg-tct-magenta/90 mt-6">
-              <Link href="/events">Browse All Events</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="text-center py-12 bg-tct-navy/50 rounded-lg border border-tct-cyan/20">
+        <h3 className="text-xl font-semibold mb-2">No Events Scheduled</h3>
+        <p className="text-gray-400 mb-6">Check back soon for upcoming events!</p>
+        <Link href="/dashboard">
+          <Button variant="outline" className="border-tct-cyan text-tct-cyan hover:bg-tct-cyan/10">
+            Return to Dashboard
+          </Button>
+        </Link>
       </div>
     )
   }
 
-  const currentEvent = events[currentIndex]
-
   return (
-    <div className="relative w-full max-w-md mx-auto" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-      <div className="absolute -top-4 -left-4 w-72 h-72 bg-tct-magenta rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
-      <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-tct-cyan rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
-
-      <Card className="relative overflow-hidden border-2 border-tct-cyan/20 bg-tct-navy/80 shadow-xl">
-        <div className="relative h-48 w-full overflow-hidden">
-          <Image
-            src={currentEvent.image || "/placeholder.svg"}
-            alt={currentEvent.title}
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-          <Badge className={`absolute top-3 left-3 ${getCategoryColor(currentEvent.category)}`}>
-            {currentEvent.category}
-          </Badge>
-          <div className="absolute bottom-3 left-3 right-3 text-white">
-            <h3 className="text-xl font-bold">{currentEvent.title}</h3>
-            <div className="flex items-center text-sm mt-1">
-              <Calendar className="h-3 w-3 mr-1" />
-              <span>{currentEvent.date}</span>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {events.map((event) => (
+        <div key={event.id} className="bg-tct-navy/80 border border-tct-cyan/20 rounded-lg overflow-hidden shadow-lg">
+          <div className="relative h-48">
+            <Image src={event.image || "/placeholder.svg"} alt={event.title} fill className="object-cover" />
+            <div className="absolute top-4 left-4">
+              <Badge className={getCategoryColor(event.category)}>{event.category}</Badge>
             </div>
           </div>
-        </div>
-
-        <CardContent className="p-4 text-white">
-          <div className="flex items-start gap-2 mb-4">
-            <MapPin className="h-4 w-4 text-tct-cyan mt-0.5" />
-            <span className="text-sm text-gray-300">{currentEvent.location}</span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-300">Starting from</p>
-              <p className="text-xl font-bold text-tct-magenta">{currentEvent.price}</p>
+          <div className="p-5">
+            <h3 className="text-xl font-bold mb-2">{event.title}</h3>
+            <div className="space-y-2 text-gray-300 mb-4">
+              <div className="flex items-center">
+                <Calendar className="h-4 w-4 mr-2 text-tct-magenta" />
+                {new Date(event.date).toLocaleDateString()}
+              </div>
+              <div className="flex items-center">
+                <MapPin className="h-4 w-4 mr-2 text-tct-coral" />
+                {event.location}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9 rounded-full border-tct-cyan text-white">
-                    <Share2 className="h-4 w-4" />
-                    <span className="sr-only">Share event</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-tct-navy text-white border-tct-cyan">
-                  <DropdownMenuItem onClick={() => shareEvent(currentEvent)} className="hover:bg-tct-navy/70">
-                    Copy Link
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={`https://twitter.com/intent/tweet?text=Check out ${currentEvent.title}&url=${encodeURIComponent(
-                        `${typeof window !== "undefined" ? window.location.origin : ""}/events/${currentEvent.id}`,
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:bg-tct-navy/70"
-                    >
-                      Share on Twitter
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-                        `${typeof window !== "undefined" ? window.location.origin : ""}/events/${currentEvent.id}`,
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:bg-tct-navy/70"
-                    >
-                      Share on Facebook
-                    </a>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Link href={`/events/${currentEvent.id}`}>
-                <Button className="bg-tct-magenta hover:bg-tct-magenta/90">View Details</Button>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-400">Starting from</p>
+                <p className="text-xl font-bold text-tct-magenta">${event.price}</p>
+              </div>
+              <Link href={`/events/${event.id}`}>
+                <Button>
+                  Details
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </Link>
             </div>
           </div>
-
-          <div className="flex justify-between items-center mt-4">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full border-tct-cyan text-white hover:bg-tct-navy/70"
-              onClick={prevSlide}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="sr-only">Previous event</span>
-            </Button>
-
-            <div className="flex gap-1">
-              {events.map((_, index) => (
-                <div
-                  key={index}
-                  className={`h-2 w-2 rounded-full ${index === currentIndex ? "bg-tct-magenta" : "bg-tct-cyan/30"}`}
-                />
-              ))}
-            </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full border-tct-cyan text-white hover:bg-tct-navy/70"
-              onClick={nextSlide}
-            >
-              <ChevronRight className="h-4 w-4" />
-              <span className="sr-only">Next event</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      ))}
     </div>
   )
 }

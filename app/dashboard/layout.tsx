@@ -4,228 +4,197 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { BarChart3, CalendarDays, CreditCard, LogOut, Menu, QrCode, Settings, User, Users } from "lucide-react"
 import { Logo } from "@/components/logo"
-import { Ticket } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { ProtectedRoute } from "@/components/protected-route"
+import {
+  Calendar,
+  CreditCard,
+  Home,
+  LogOut,
+  Menu,
+  QrCode,
+  Settings,
+  Ticket,
+  User,
+  Users,
+  X,
+  BarChart3,
+  Wallet,
+} from "lucide-react"
 
-interface DashboardLayoutProps {
-  children: React.ReactNode
-}
-
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth()
   const pathname = usePathname()
-  const router = useRouter()
-  const { userData, logOut } = useAuth()
-  const [role, setRole] = useState<"admin" | "seller" | "user">("user")
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  // Set role based on user data
+  // Close mobile menu when path changes
   useEffect(() => {
-    if (userData?.role) {
-      setRole(userData.role as "admin" | "seller" | "user")
-    }
-  }, [userData])
+    setIsMobileMenuOpen(false)
+  }, [pathname])
 
-  // Handle role change (for demo purposes)
-  const handleRoleChange = (newRole: "admin" | "seller" | "user") => {
-    setRole(newRole)
-
-    // Redirect to the appropriate dashboard
-    if (newRole === "admin") {
-      router.push("/dashboard/admin")
-    } else if (newRole === "seller") {
-      router.push("/dashboard/seller")
-    } else {
-      router.push("/dashboard/user")
-    }
+  const isActive = (path: string) => {
+    return pathname === path || pathname?.startsWith(`${path}/`)
   }
 
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logOut()
-      router.push("/")
-    } catch (error) {
-      console.error("Error logging out:", error)
-    }
-  }
-
-  // Redirect to the appropriate dashboard on initial load
-  useEffect(() => {
-    if (pathname === "/dashboard") {
-      if (role === "admin") {
-        router.push("/dashboard/admin")
-      } else if (role === "seller") {
-        router.push("/dashboard/seller")
-      } else {
-        router.push("/dashboard/user")
-      }
-    }
-
-    // Restrict access based on role
-    if (role === "seller" && !pathname.startsWith("/dashboard/seller")) {
-      router.push("/dashboard/seller")
-    } else if (role === "user" && !pathname.startsWith("/dashboard/user")) {
-      router.push("/dashboard/user")
-    }
-  }, [pathname, role, router])
-
-  const adminNavItems = [
-    { href: "/dashboard/admin", label: "Admin Dashboard", icon: <BarChart3 className="h-5 w-5" /> },
-    { href: "/dashboard/seller", label: "Seller Dashboard", icon: <Users className="h-5 w-5" /> },
-    { href: "/dashboard/user", label: "User Dashboard", icon: <User className="h-5 w-5" /> },
-    { href: "/dashboard/admin/events", label: "Events", icon: <CalendarDays className="h-5 w-5" /> },
-    { href: "/dashboard/admin/sellers", label: "Sellers", icon: <Users className="h-5 w-5" /> },
-    { href: "/dashboard/admin/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
+  const navItems = [
+    {
+      title: "Dashboard",
+      href: "/dashboard",
+      icon: <Home className="h-5 w-5" />,
+      roles: ["user", "seller", "admin"],
+    },
+    {
+      title: "My Tickets",
+      href: "/dashboard/user/tickets",
+      icon: <Ticket className="h-5 w-5" />,
+      roles: ["user"],
+    },
+    {
+      title: "Payment Methods",
+      href: "/dashboard/user/payment",
+      icon: <CreditCard className="h-5 w-5" />,
+      roles: ["user"],
+    },
+    {
+      title: "Events",
+      href: "/events",
+      icon: <Calendar className="h-5 w-5" />,
+      roles: ["user", "seller", "admin"],
+    },
+    {
+      title: "Seller Dashboard",
+      href: "/dashboard/seller",
+      icon: <BarChart3 className="h-5 w-5" />,
+      roles: ["seller"],
+    },
+    {
+      title: "Scan Tickets",
+      href: "/dashboard/seller/scan",
+      icon: <QrCode className="h-5 w-5" />,
+      roles: ["seller"],
+    },
+    {
+      title: "Payments",
+      href: "/dashboard/seller/payments",
+      icon: <Wallet className="h-5 w-5" />,
+      roles: ["seller"],
+    },
+    {
+      title: "Admin Dashboard",
+      href: "/dashboard/admin",
+      icon: <Users className="h-5 w-5" />,
+      roles: ["admin"],
+    },
+    {
+      title: "Admin Setup",
+      href: "/dashboard/admin/setup",
+      icon: <Settings className="h-5 w-5" />,
+      roles: ["admin"],
+    },
+    {
+      title: "Settings",
+      href: "/dashboard/user/settings",
+      icon: <Settings className="h-5 w-5" />,
+      roles: ["user", "seller", "admin"],
+    },
   ]
 
-  const sellerNavItems = [
-    { href: "/dashboard/seller", label: "Dashboard", icon: <BarChart3 className="h-5 w-5" /> },
-    { href: "/dashboard/seller/scan", label: "Scan Tickets", icon: <QrCode className="h-5 w-5" /> },
-    { href: "/dashboard/seller/events", label: "My Events", icon: <CalendarDays className="h-5 w-5" /> },
-    { href: "/dashboard/seller/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
-  ]
-
-  const userNavItems = [
-    { href: "/dashboard/user", label: "Dashboard", icon: <BarChart3 className="h-5 w-5" /> },
-    { href: "/dashboard/user/tickets", label: "My Tickets", icon: <Ticket className="h-5 w-5" /> },
-    { href: "/dashboard/user/payments", label: "Payment Methods", icon: <CreditCard className="h-5 w-5" /> },
-    { href: "/dashboard/user/settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
-  ]
-
-  const navItems = role === "admin" ? adminNavItems : role === "seller" ? sellerNavItems : userNavItems
+  const filteredNavItems = navItems.filter((item) => {
+    // If user role is in the item's roles array, show the item
+    return item.roles.includes(user?.role || "user")
+  })
 
   return (
-    <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-tct-navy">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-tct-navy/30 bg-tct-navy text-white px-4 md:px-6">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="md:hidden border-tct-cyan text-white hover:text-tct-navy"
-              >
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle navigation menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 sm:max-w-none bg-tct-navy border-r border-tct-cyan/30 text-white">
-              <div className="mb-4">
-                <Logo size="lg" />
-              </div>
-              <nav className="grid gap-2 text-lg font-medium">
-                {navItems.map((item, index) => (
-                  <Link
-                    key={index}
-                    href={item.href}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md ${
-                      pathname === item.href ? "bg-tct-magenta text-white" : "hover:bg-tct-navy/70"
-                    }`}
-                  >
-                    {item.icon}
-                    {item.label}
-                  </Link>
-                ))}
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md text-red-400 hover:bg-tct-navy/70 text-left"
-                >
-                  <LogOut className="h-5 w-5" />
-                  Logout
-                </button>
-              </nav>
-            </SheetContent>
-          </Sheet>
-          <Logo size="md" />
-          <div className="ml-auto flex items-center gap-4">
-            {/* Role switcher (only for admin in demo purposes) */}
-            {userData?.role === "admin" && (
-              <div className="hidden md:flex gap-2">
-                <Button
-                  variant={role === "user" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleRoleChange("user")}
-                  className={
-                    role === "user"
-                      ? "bg-tct-magenta hover:bg-tct-magenta/90"
-                      : "border-tct-cyan text-white hover:text-tct-navy"
-                  }
-                >
-                  User
-                </Button>
-                <Button
-                  variant={role === "seller" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleRoleChange("seller")}
-                  className={
-                    role === "seller"
-                      ? "bg-tct-magenta hover:bg-tct-magenta/90"
-                      : "border-tct-cyan text-white hover:text-tct-navy"
-                  }
-                >
-                  Seller
-                </Button>
-                <Button
-                  variant={role === "admin" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleRoleChange("admin")}
-                  className={
-                    role === "admin"
-                      ? "bg-tct-magenta hover:bg-tct-magenta/90"
-                      : "border-tct-cyan text-white hover:text-tct-navy"
-                  }
-                >
-                  Admin
-                </Button>
-              </div>
-            )}
-            <Button variant="outline" size="icon" className="border-tct-cyan text-white hover:text-tct-navy">
-              <Settings className="h-5 w-5" />
-              <span className="sr-only">Settings</span>
-            </Button>
-            <Link href="/dashboard/user/settings">
-              <Button variant="outline" size="icon" className="border-tct-cyan text-white hover:text-tct-navy">
-                <User className="h-5 w-5" />
-                <span className="sr-only">Account</span>
-              </Button>
-            </Link>
-          </div>
-        </header>
-        <div className="flex flex-1">
-          <aside className="hidden w-64 flex-col border-r border-tct-navy/30 md:flex bg-tct-navy text-white">
-            <div className="p-4">
-              <Logo size="lg" />
-            </div>
-            <nav className="grid gap-2 p-4 text-sm font-medium">
-              {navItems.map((item, index) => (
-                <Link
-                  key={index}
-                  href={item.href}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md ${
-                    pathname === item.href ? "bg-tct-magenta text-white" : "hover:bg-tct-navy/70"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-red-400 hover:bg-tct-navy/70 text-left"
-              >
-                <LogOut className="h-5 w-5" />
-                Logout
-              </button>
-            </nav>
-          </aside>
-          <main className="flex-1 p-4 md:p-6 bg-tct-navy/95 text-white">{children}</main>
+    <div className="min-h-screen bg-tct-navy text-white">
+      {/* Mobile Header */}
+      <header className="lg:hidden bg-tct-navy border-b border-tct-cyan/20 p-4">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
         </div>
+      </header>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden bg-tct-navy border-b border-tct-cyan/20">
+          <nav className="flex flex-col p-4 space-y-2">
+            {filteredNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center px-4 py-2 rounded-md ${
+                  isActive(item.href)
+                    ? "bg-tct-magenta text-white"
+                    : "hover:bg-tct-navy/50 text-gray-300 hover:text-white"
+                }`}
+              >
+                {item.icon}
+                <span className="ml-3">{item.title}</span>
+              </Link>
+            ))}
+            <Button
+              variant="ghost"
+              className="flex items-center justify-start px-4 py-2 text-gray-300 hover:text-white hover:bg-tct-navy/50"
+              onClick={logout}
+            >
+              <LogOut className="h-5 w-5" />
+              <span className="ml-3">Logout</span>
+            </Button>
+          </nav>
+        </div>
+      )}
+
+      <div className="flex">
+        {/* Sidebar (desktop) */}
+        <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-tct-navy border-r border-tct-cyan/20 min-h-screen">
+          <div className="p-4">
+            <Logo />
+          </div>
+          <nav className="flex-1 p-4 space-y-2">
+            {filteredNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center px-4 py-2 rounded-md ${
+                  isActive(item.href)
+                    ? "bg-tct-magenta text-white"
+                    : "hover:bg-tct-navy/50 text-gray-300 hover:text-white"
+                }`}
+              >
+                {item.icon}
+                <span className="ml-3">{item.title}</span>
+              </Link>
+            ))}
+          </nav>
+          <div className="p-4 border-t border-tct-cyan/20">
+            <div className="flex items-center mb-4">
+              <div className="h-8 w-8 rounded-full bg-tct-magenta flex items-center justify-center">
+                <User className="h-4 w-4" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium">{user?.displayName || user?.email}</p>
+                <p className="text-xs text-gray-400 capitalize">{user?.role || "User"}</p>
+              </div>
+            </div>
+            <Button variant="outline" className="w-full" onClick={logout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 bg-tct-navy/95">{children}</main>
       </div>
-    </ProtectedRoute>
+    </div>
   )
 }
