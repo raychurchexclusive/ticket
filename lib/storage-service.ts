@@ -1,12 +1,9 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
-import { storage } from "./firebase"
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
+import { app } from "./firebase"
 
-/**
- * Uploads a profile picture to Firebase Storage
- * @param userId User ID
- * @param file File to upload
- * @returns Download URL of the uploaded file
- */
+const storage = getStorage(app)
+
+// Upload a profile picture
 export async function uploadProfilePicture(userId: string, file: File): Promise<string> {
   try {
     // Create a storage reference
@@ -25,16 +22,11 @@ export async function uploadProfilePicture(userId: string, file: File): Promise<
   }
 }
 
-/**
- * Uploads an event image to Firebase Storage
- * @param eventId Event ID
- * @param file File to upload
- * @returns Download URL of the uploaded file
- */
+// Upload an event image
 export async function uploadEventImage(eventId: string, file: File): Promise<string> {
   try {
     // Create a storage reference
-    const storageRef = ref(storage, `events/${eventId}/main-image`)
+    const storageRef = ref(storage, `events/${eventId}/event-image`)
 
     // Upload the file
     const snapshot = await uploadBytes(storageRef, file)
@@ -49,60 +41,11 @@ export async function uploadEventImage(eventId: string, file: File): Promise<str
   }
 }
 
-/**
- * Uploads multiple event images to Firebase Storage
- * @param eventId Event ID
- * @param files Files to upload
- * @returns Array of download URLs
- */
-export async function uploadEventGallery(eventId: string, files: File[]): Promise<string[]> {
-  try {
-    const downloadURLs: string[] = []
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      // Create a storage reference
-      const storageRef = ref(storage, `events/${eventId}/gallery/${i}`)
-
-      // Upload the file
-      const snapshot = await uploadBytes(storageRef, file)
-
-      // Get the download URL
-      const downloadURL = await getDownloadURL(snapshot.ref)
-      downloadURLs.push(downloadURL)
-    }
-
-    return downloadURLs
-  } catch (error) {
-    console.error("Error uploading event gallery:", error)
-    throw error
-  }
-}
-
-/**
- * Deletes a file from Firebase Storage
- * @param path Path to the file
- */
-export async function deleteFile(path: string): Promise<void> {
-  try {
-    const storageRef = ref(storage, path)
-    await deleteObject(storageRef)
-  } catch (error) {
-    console.error("Error deleting file:", error)
-    throw error
-  }
-}
-
-/**
- * Uploads a ticket attachment to Firebase Storage
- * @param ticketId Ticket ID
- * @param file File to upload
- * @returns Download URL of the uploaded file
- */
+// Upload a ticket attachment (e.g., PDF ticket)
 export async function uploadTicketAttachment(ticketId: string, file: File): Promise<string> {
   try {
     // Create a storage reference
-    const storageRef = ref(storage, `tickets/${ticketId}/attachments/${file.name}`)
+    const storageRef = ref(storage, `tickets/${ticketId}/attachment`)
 
     // Upload the file
     const snapshot = await uploadBytes(storageRef, file)
@@ -113,6 +56,28 @@ export async function uploadTicketAttachment(ticketId: string, file: File): Prom
     return downloadURL
   } catch (error) {
     console.error("Error uploading ticket attachment:", error)
+    throw error
+  }
+}
+
+// Delete a file
+export async function deleteFile(path: string): Promise<void> {
+  try {
+    const fileRef = ref(storage, path)
+    await deleteObject(fileRef)
+  } catch (error) {
+    console.error("Error deleting file:", error)
+    throw error
+  }
+}
+
+// Get a download URL for a file
+export async function getFileURL(path: string): Promise<string> {
+  try {
+    const fileRef = ref(storage, path)
+    return await getDownloadURL(fileRef)
+  } catch (error) {
+    console.error("Error getting file URL:", error)
     throw error
   }
 }

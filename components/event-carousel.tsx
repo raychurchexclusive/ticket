@@ -6,9 +6,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, Calendar, MapPin, Share2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, MapPin, Share2, CalendarX } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "@/components/ui/use-toast"
+import { db } from "@/lib/firebase"
+import { collection, query, where, orderBy, limit, getDocs } from "firebase/firestore"
 
 interface Event {
   id: string
@@ -20,55 +22,62 @@ interface Event {
   category: string
 }
 
-// This would come from an API in a real application
-const events: Event[] = [
-  {
-    id: "1",
-    title: "Summer Music Festival",
-    date: "June 15, 2025",
-    location: "Central Park, New York",
-    image: "/placeholder.svg?height=200&width=400",
-    price: "$49.99",
-    category: "Music",
-  },
-  {
-    id: "2",
-    title: "Tech Conference 2025",
-    date: "July 10, 2025",
-    location: "Convention Center, San Francisco",
-    image: "/placeholder.svg?height=200&width=400",
-    price: "$99.99",
-    category: "Conference",
-  },
-  {
-    id: "3",
-    title: "Comedy Night",
-    date: "May 25, 2025",
-    location: "Laugh Factory, Los Angeles",
-    image: "/placeholder.svg?height=200&width=400",
-    price: "$29.99",
-    category: "Comedy",
-  },
-  {
-    id: "4",
-    title: "Basketball Championship",
-    date: "August 5, 2025",
-    location: "Sports Arena, Chicago",
-    image: "/placeholder.svg?height=200&width=400",
-    price: "$79.99",
-    category: "Sports",
-  },
-]
-
 export function EventCarousel() {
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
 
+  // Fetch events from Firestore
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const now = new Date()
+        const eventsRef = collection(db, "events")
+        const eventsQuery = query(
+          eventsRef,
+          where("status", "==", "active"),
+          where("date", ">=", now.toISOString().split("T")[0]),
+          orderBy("date", "asc"),
+          limit(10),
+        )
+
+        const snapshot = await getDocs(eventsQuery)
+
+        if (snapshot.empty) {
+          setEvents([])
+        } else {
+          const eventData = snapshot.docs.map((doc) => {
+            const data = doc.data()
+            return {
+              id: doc.id,
+              title: data.title,
+              date: data.date,
+              location: data.location,
+              image: data.image || "/placeholder.svg?height=200&width=400",
+              price: `$${data.price}`,
+              category: data.category,
+            }
+          })
+          setEvents(eventData)
+        }
+      } catch (error) {
+        console.error("Error fetching events:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchEvents()
+  }, [])
+
   const nextSlide = () => {
+    if (events.length === 0) return
     setCurrentIndex((prevIndex) => (prevIndex + 1) % events.length)
   }
 
   const prevSlide = () => {
+    if (events.length === 0) return
     setCurrentIndex((prevIndex) => (prevIndex - 1 + events.length) % events.length)
   }
 
@@ -97,20 +106,18 @@ export function EventCarousel() {
 
   // Auto-play functionality
   useEffect(() => {
-    if (!isAutoPlaying) return
+    if (!isAutoPlaying || events.length === 0) return
 
     const interval = setInterval(() => {
       nextSlide()
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [currentIndex, isAutoPlaying])
+  }, [currentIndex, isAutoPlaying, events.length])
 
   // Pause auto-play on hover
   const handleMouseEnter = () => setIsAutoPlaying(false)
   const handleMouseLeave = () => setIsAutoPlaying(true)
-
-  const currentEvent = events[currentIndex]
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -126,6 +133,46 @@ export function EventCarousel() {
         return "bg-gray-200 text-gray-800"
     }
   }
+
+  if (loading) {
+    return (
+      <div className="relative w-full max-w-md mx-auto">
+        <Card className="relative overflow-hidden border-2 border-tct-cyan/20 bg-tct-navy/80 shadow-xl">
+          <div className="h-48 w-full bg-tct-navy/50 animate-pulse"></div>
+          <CardContent className="p-4 text-white">
+            <div className="h-6 w-3/4 bg-tct-navy/50 animate-pulse mb-4"></div>
+            <div className="h-4 w-1/2 bg-tct-navy/50 animate-pulse mb-4"></div>
+            <div className="flex justify-between">
+              <div className="h-8 w-1/4 bg-tct-navy/50 animate-pulse"></div>
+              <div className="h-8 w-1/4 bg-tct-navy/50 animate-pulse"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="relative w-full max-w-md mx-auto">
+        <div className="absolute -top-4 -left-4 w-72 h-72 bg-tct-magenta rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
+        <div className="absolute -bottom-4 -right-4 w-72 h-72 bg-tct-cyan rounded-full mix-blend-multiply filter blur-2xl opacity-30"></div>
+
+        <Card className="relative overflow-hidden border-2 border-tct-cyan/20 bg-tct-navy/80 shadow-xl">
+          <CardContent className="p-8 text-white flex flex-col items-center justify-center min-h-[250px]">
+            <CalendarX className="h-16 w-16 text-tct-magenta mb-4 opacity-70" />
+            <h3 className="text-xl font-bold text-center mb-2">No Events Scheduled</h3>
+            <p className="text-gray-300 text-center">Check back soon for upcoming events!</p>
+            <Button className="bg-tct-magenta hover:bg-tct-magenta/90 mt-6">
+              <Link href="/events">Browse All Events</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const currentEvent = events[currentIndex]
 
   return (
     <div className="relative w-full max-w-md mx-auto" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>

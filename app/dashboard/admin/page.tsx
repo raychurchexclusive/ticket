@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,10 @@ import {
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
+import { db } from "@/lib/firebase"
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, orderBy } from "firebase/firestore"
+import { createEventProduct } from "@/lib/stripe"
+import { getSellerStripeAccount } from "@/app/api/stripe/actions"
 
 // Types
 interface Seller {
@@ -82,76 +86,15 @@ interface EventRequest {
 
 export default function AdminDashboard() {
   // Seller state
-  const [sellers, setSellers] = useState<Seller[]>([
-    {
-      id: "1",
-      email: "john.doe@example.com",
-      status: "active",
-      events: 3,
-      dateAdded: "2025-01-15",
-    },
-    {
-      id: "2",
-      email: "jane.smith@example.com",
-      status: "active",
-      events: 2,
-      dateAdded: "2025-02-20",
-    },
-    {
-      id: "3",
-      email: "mark.wilson@example.com",
-      status: "pending",
-      events: 0,
-      dateAdded: "2025-03-05",
-    },
-  ])
+  const [sellers, setSellers] = useState<Seller[]>([])
   const [newSellerEmail, setNewSellerEmail] = useState("")
   const [isSellerDialogOpen, setIsSellerDialogOpen] = useState(false)
   const [sellerToDelete, setSellerToDelete] = useState<string | null>(null)
   const [isDeleteSellerDialogOpen, setIsDeleteSellerDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Event state
-  const [events, setEvents] = useState<Event[]>([
-    {
-      id: "1",
-      title: "Summer Music Festival",
-      date: "2025-06-15",
-      time: "14:00 - 22:00",
-      location: "Central Park, New York",
-      price: "49.99",
-      category: "Music",
-      image: "/placeholder.svg?height=200&width=400",
-      ticketsAvailable: 250,
-      ticketsSold: 120,
-      status: "active",
-    },
-    {
-      id: "2",
-      title: "Tech Conference 2025",
-      date: "2025-07-10",
-      time: "09:00 - 17:00",
-      location: "Convention Center, San Francisco",
-      price: "99.99",
-      category: "Conference",
-      image: "/placeholder.svg?height=200&width=400",
-      ticketsAvailable: 500,
-      ticketsSold: 85,
-      status: "active",
-    },
-    {
-      id: "3",
-      title: "Comedy Night",
-      date: "2025-05-25",
-      time: "20:00 - 23:00",
-      location: "Laugh Factory, Los Angeles",
-      price: "29.99",
-      category: "Comedy",
-      image: "/placeholder.svg?height=200&width=400",
-      ticketsAvailable: 150,
-      ticketsSold: 42,
-      status: "draft",
-    },
-  ])
+  const [events, setEvents] = useState<Event[]>([])
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
   const [newEvent, setNewEvent] = useState<Partial<Event>>({
     title: "",
@@ -167,79 +110,153 @@ export default function AdminDashboard() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
   // Event requests state
-  const [eventRequests, setEventRequests] = useState<EventRequest[]>([
-    {
-      id: "req1",
-      sellerId: "1",
-      sellerEmail: "john.doe@example.com",
-      title: "Comedy Night",
-      date: "2025-05-25",
-      time: "8:00 PM - 11:00 PM",
-      location: "Laugh Factory, Los Angeles",
-      description: "A night of non-stop laughter featuring the funniest stand-up comedians in the country.",
-      price: "29.99",
-      category: "Comedy",
-      ticketsAvailable: 150,
-      image: "/placeholder.svg?height=200&width=400",
-      status: "pending",
-      requestDate: "2025-03-10",
-    },
-    {
-      id: "req2",
-      sellerId: "2",
-      sellerEmail: "jane.smith@example.com",
-      title: "Jazz in the Park",
-      date: "2025-07-20",
-      time: "6:00 PM - 9:00 PM",
-      location: "Golden Gate Park, San Francisco",
-      description: "An evening of smooth jazz under the stars. Bring your own blanket and refreshments.",
-      price: "19.99",
-      category: "Music",
-      ticketsAvailable: 200,
-      image: null,
-      status: "pending",
-      requestDate: "2025-03-05",
-    },
-    {
-      id: "req3",
-      sellerId: "1",
-      sellerEmail: "john.doe@example.com",
-      title: "Indie Film Festival",
-      date: "2025-08-15",
-      time: "12:00 PM - 10:00 PM",
-      location: "Downtown Cinema, Chicago",
-      description: "A showcase of independent films from around the world.",
-      price: "39.99",
-      category: "Arts",
-      ticketsAvailable: 300,
-      image: null,
-      status: "pending",
-      requestDate: "2025-03-01",
-    },
-  ])
+  const [eventRequests, setEventRequests] = useState<EventRequest[]>([])
   const [selectedRequest, setSelectedRequest] = useState<EventRequest | null>(null)
   const [isRequestDetailsDialogOpen, setIsRequestDetailsDialogOpen] = useState(false)
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false)
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
   const [rejectionFeedback, setRejectionFeedback] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Fetch data from Firestore
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+
+        // Fetch sellers
+        const sellersRef = collection(db, "users")
+        const sellersQuery = query(sellersRef, where("role", "==", "seller"))
+        const sellersSnapshot = await getDocs(sellersQuery)
+
+        const sellersData = sellersSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            email: data.email,
+            status: data.status || "active",
+            events: data.events || 0,
+            dateAdded: data.createdAt?.toDate().toISOString().split("T")[0] || new Date().toISOString().split("T")[0],
+          }
+        })
+        setSellers(sellersData)
+
+        // Fetch events
+        const eventsRef = collection(db, "events")
+        const eventsSnapshot = await getDocs(eventsRef)
+
+        const eventsData = eventsSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            title: data.title,
+            date: data.date,
+            time: data.time || "",
+            location: data.location || "",
+            price: data.price,
+            category: data.category || "Music",
+            image: data.image || "/placeholder.svg?height=200&width=400",
+            ticketsAvailable: data.ticketsAvailable || 0,
+            ticketsSold: data.ticketsSold || 0,
+            status: data.status || "draft",
+          }
+        })
+        setEvents(eventsData)
+
+        // Fetch event requests
+        const requestsRef = collection(db, "eventRequests")
+        const requestsQuery = query(requestsRef, orderBy("requestDate", "desc"))
+        const requestsSnapshot = await getDocs(requestsQuery)
+
+        const requestsData = requestsSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            sellerId: data.sellerId,
+            sellerEmail: data.sellerEmail,
+            title: data.title,
+            date: data.date,
+            time: data.time || "",
+            location: data.location || "",
+            description: data.description || "",
+            price: data.price,
+            category: data.category || "Music",
+            ticketsAvailable: data.ticketsAvailable || 0,
+            image: data.image || null,
+            status: data.status || "pending",
+            requestDate:
+              data.requestDate?.toDate().toISOString().split("T")[0] || new Date().toISOString().split("T")[0],
+            feedback: data.feedback,
+          }
+        })
+        setEventRequests(requestsData)
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
 
   // Handler functions for sellers
-  const handleAddSeller = () => {
+  const handleAddSeller = async () => {
     if (newSellerEmail && !sellers.some((seller) => seller.email === newSellerEmail)) {
-      const newSeller: Seller = {
-        id: (sellers.length + 1).toString(),
-        email: newSellerEmail,
-        status: "active",
-        events: 0,
-        dateAdded: new Date().toISOString().split("T")[0],
+      try {
+        // Check if user exists
+        const usersRef = collection(db, "users")
+        const userQuery = query(usersRef, where("email", "==", newSellerEmail))
+        const userSnapshot = await getDocs(userQuery)
+
+        if (userSnapshot.empty) {
+          toast({
+            title: "Error",
+            description: "User with this email does not exist",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const userId = userSnapshot.docs[0].id
+        const userRef = doc(db, "users", userId)
+
+        // Update user role to seller
+        await updateDoc(userRef, {
+          role: "seller",
+          status: "active",
+          updatedAt: new Date(),
+        })
+
+        const newSeller: Seller = {
+          id: userId,
+          email: newSellerEmail,
+          status: "active",
+          events: 0,
+          dateAdded: new Date().toISOString().split("T")[0],
+        }
+
+        setSellers([...sellers, newSeller])
+        setNewSellerEmail("")
+        setIsSellerDialogOpen(false)
+
+        toast({
+          title: "Seller added",
+          description: `${newSellerEmail} has been added as a seller.`,
+        })
+      } catch (error) {
+        console.error("Error adding seller:", error)
+        toast({
+          title: "Error",
+          description: "Failed to add seller",
+          variant: "destructive",
+        })
       }
-      setSellers([...sellers, newSeller])
-      setNewSellerEmail("")
-      setIsSellerDialogOpen(false)
-      toast({
-        title: "Seller added",
-        description: `${newSellerEmail} has been added as a seller.`,
-      })
     } else if (sellers.some((seller) => seller.email === newSellerEmail)) {
       toast({
         title: "Error",
@@ -254,16 +271,35 @@ export default function AdminDashboard() {
     setIsDeleteSellerDialogOpen(true)
   }
 
-  const handleDeleteSeller = () => {
+  const handleDeleteSeller = async () => {
     if (sellerToDelete) {
-      const sellerEmail = sellers.find((s) => s.id === sellerToDelete)?.email
-      setSellers(sellers.filter((seller) => seller.id !== sellerToDelete))
-      setIsDeleteSellerDialogOpen(false)
-      setSellerToDelete(null)
-      toast({
-        title: "Seller removed",
-        description: `${sellerEmail} has been removed from sellers.`,
-      })
+      try {
+        const sellerEmail = sellers.find((s) => s.id === sellerToDelete)?.email
+
+        // Update user role back to user
+        const userRef = doc(db, "users", sellerToDelete)
+        await updateDoc(userRef, {
+          role: "user",
+          status: "active",
+          updatedAt: new Date(),
+        })
+
+        setSellers(sellers.filter((seller) => seller.id !== sellerToDelete))
+        setIsDeleteSellerDialogOpen(false)
+        setSellerToDelete(null)
+
+        toast({
+          title: "Seller removed",
+          description: `${sellerEmail} has been removed from sellers.`,
+        })
+      } catch (error) {
+        console.error("Error removing seller:", error)
+        toast({
+          title: "Error",
+          description: "Failed to remove seller",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -279,38 +315,66 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (newEvent.title && newEvent.date && newEvent.price) {
-      const eventToAdd: Event = {
-        id: (events.length + 1).toString(),
-        title: newEvent.title || "",
-        date: newEvent.date || "",
-        time: newEvent.time || "",
-        location: newEvent.location || "",
-        price: newEvent.price || "",
-        category: newEvent.category || "Music",
-        image: selectedImage || "/placeholder.svg?height=200&width=400",
-        ticketsAvailable: newEvent.ticketsAvailable || 100,
-        ticketsSold: 0,
-        status: (newEvent.status as "active" | "draft" | "completed" | "cancelled") || "draft",
+      try {
+        const eventData = {
+          title: newEvent.title,
+          date: newEvent.date,
+          time: newEvent.time || "",
+          location: newEvent.location || "",
+          price: newEvent.price,
+          category: newEvent.category || "Music",
+          image: selectedImage || "/placeholder.svg?height=200&width=400",
+          ticketsAvailable: newEvent.ticketsAvailable || 100,
+          ticketsSold: 0,
+          status: newEvent.status || "draft",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+
+        const eventRef = await addDoc(collection(db, "events"), eventData)
+
+        const eventToAdd: Event = {
+          id: eventRef.id,
+          title: newEvent.title || "",
+          date: newEvent.date || "",
+          time: newEvent.time || "",
+          location: newEvent.location || "",
+          price: newEvent.price || "",
+          category: newEvent.category || "Music",
+          image: selectedImage || "/placeholder.svg?height=200&width=400",
+          ticketsAvailable: newEvent.ticketsAvailable || 100,
+          ticketsSold: 0,
+          status: (newEvent.status as "active" | "draft" | "completed" | "cancelled") || "draft",
+        }
+
+        setEvents([...events, eventToAdd])
+        setNewEvent({
+          title: "",
+          date: "",
+          time: "",
+          location: "",
+          price: "",
+          category: "Music",
+          ticketsAvailable: 100,
+          status: "draft",
+        })
+        setSelectedImage(null)
+        setIsEventDialogOpen(false)
+
+        toast({
+          title: "Event created",
+          description: `${eventToAdd.title} has been created successfully.`,
+        })
+      } catch (error) {
+        console.error("Error creating event:", error)
+        toast({
+          title: "Error",
+          description: "Failed to create event",
+          variant: "destructive",
+        })
       }
-      setEvents([...events, eventToAdd])
-      setNewEvent({
-        title: "",
-        date: "",
-        time: "",
-        location: "",
-        price: "",
-        category: "Music",
-        ticketsAvailable: 100,
-        status: "draft",
-      })
-      setSelectedImage(null)
-      setIsEventDialogOpen(false)
-      toast({
-        title: "Event created",
-        description: `${eventToAdd.title} has been created successfully.`,
-      })
     } else {
       toast({
         title: "Error",
@@ -337,60 +401,162 @@ export default function AdminDashboard() {
     setIsRejectDialogOpen(true)
   }
 
-  const handleApproveRequest = () => {
+  const handleApproveRequest = async () => {
     if (!selectedRequest) return
 
-    // Update the request status
-    const updatedRequests = eventRequests.map((req) =>
-      req.id === selectedRequest.id ? { ...req, status: "approved" as const } : req,
-    )
-    setEventRequests(updatedRequests)
+    try {
+      setIsProcessing(true)
 
-    // Create a new event from the request
-    const newEventFromRequest: Event = {
-      id: (events.length + 1).toString(),
-      title: selectedRequest.title,
-      date: selectedRequest.date,
-      time: selectedRequest.time,
-      location: selectedRequest.location,
-      price: selectedRequest.price,
-      category: selectedRequest.category,
-      image: selectedRequest.image || "/placeholder.svg?height=200&width=400",
-      ticketsAvailable: selectedRequest.ticketsAvailable,
-      ticketsSold: 0,
-      status: "active",
+      // Get seller's Stripe account
+      const sellerStripeData = await getSellerStripeAccount(selectedRequest.sellerId)
+
+      if (sellerStripeData.error || !sellerStripeData.accountId) {
+        toast({
+          title: "Error",
+          description: "Seller does not have a connected Stripe account",
+          variant: "destructive",
+        })
+        setIsProcessing(false)
+        return
+      }
+
+      // Create Stripe product for the event
+      const stripeProduct = await createEventProduct(
+        selectedRequest.id,
+        selectedRequest.title,
+        selectedRequest.description || "",
+        Number.parseFloat(selectedRequest.price),
+        sellerStripeData.accountId,
+      )
+
+      if (!stripeProduct.success) {
+        toast({
+          title: "Error",
+          description: "Failed to create Stripe product for this event",
+          variant: "destructive",
+        })
+        setIsProcessing(false)
+        return
+      }
+
+      // Update the request status
+      const requestRef = doc(db, "eventRequests", selectedRequest.id)
+      await updateDoc(requestRef, {
+        status: "approved",
+        updatedAt: new Date(),
+      })
+
+      const updatedRequests = eventRequests.map((req) =>
+        req.id === selectedRequest.id ? { ...req, status: "approved" as const } : req,
+      )
+      setEventRequests(updatedRequests)
+
+      // Create a new event from the request
+      const eventData = {
+        title: selectedRequest.title,
+        date: selectedRequest.date,
+        time: selectedRequest.time,
+        location: selectedRequest.location,
+        description: selectedRequest.description,
+        price: selectedRequest.price,
+        category: selectedRequest.category,
+        image: selectedRequest.image || "/placeholder.svg?height=200&width=400",
+        ticketsAvailable: selectedRequest.ticketsAvailable,
+        ticketsSold: 0,
+        status: "active",
+        sellerId: selectedRequest.sellerId,
+        sellerEmail: selectedRequest.sellerEmail,
+        stripeProductId: stripeProduct.productId,
+        stripePriceId: stripeProduct.priceId,
+        sellerStripeAccountId: sellerStripeData.accountId,
+        platformFeePercent: 5, // 5% platform fee
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      const eventRef = await addDoc(collection(db, "events"), eventData)
+
+      const newEventFromRequest: Event = {
+        id: eventRef.id,
+        title: selectedRequest.title,
+        date: selectedRequest.date,
+        time: selectedRequest.time,
+        location: selectedRequest.location,
+        price: selectedRequest.price,
+        category: selectedRequest.category,
+        image: selectedRequest.image || "/placeholder.svg?height=200&width=400",
+        ticketsAvailable: selectedRequest.ticketsAvailable,
+        ticketsSold: 0,
+        status: "active",
+      }
+      setEvents([...events, newEventFromRequest])
+
+      // Update seller's event count
+      const sellerRef = doc(db, "users", selectedRequest.sellerId)
+      const sellerDoc = await getDoc(sellerRef)
+
+      if (sellerDoc.exists()) {
+        const sellerData = sellerDoc.data()
+        await updateDoc(sellerRef, {
+          events: (sellerData.events || 0) + 1,
+          updatedAt: new Date(),
+        })
+
+        const updatedSellers = sellers.map((seller) =>
+          seller.id === selectedRequest.sellerId ? { ...seller, events: seller.events + 1 } : seller,
+        )
+        setSellers(updatedSellers)
+      }
+
+      setIsApproveDialogOpen(false)
+      setSelectedRequest(null)
+      setIsProcessing(false)
+
+      toast({
+        title: "Event request approved",
+        description: `${selectedRequest.title} has been approved and added to events.`,
+      })
+    } catch (error) {
+      console.error("Error approving event request:", error)
+      setIsProcessing(false)
+      toast({
+        title: "Error",
+        description: "Failed to approve event request",
+        variant: "destructive",
+      })
     }
-    setEvents([...events, newEventFromRequest])
-
-    // Update seller's event count
-    const updatedSellers = sellers.map((seller) =>
-      seller.id === selectedRequest.sellerId ? { ...seller, events: seller.events + 1 } : seller,
-    )
-    setSellers(updatedSellers)
-
-    setIsApproveDialogOpen(false)
-    setSelectedRequest(null)
-
-    toast({
-      title: "Event request approved",
-      description: `${selectedRequest.title} has been approved and added to events.`,
-    })
   }
 
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
     if (!selectedRequest) return
 
-    const updatedRequests = eventRequests.map((req) =>
-      req.id === selectedRequest.id ? { ...req, status: "rejected" as const, feedback: rejectionFeedback } : req,
-    )
-    setEventRequests(updatedRequests)
-    setIsRejectDialogOpen(false)
-    setSelectedRequest(null)
+    try {
+      const requestRef = doc(db, "eventRequests", selectedRequest.id)
+      await updateDoc(requestRef, {
+        status: "rejected",
+        feedback: rejectionFeedback,
+        updatedAt: new Date(),
+      })
 
-    toast({
-      title: "Event request rejected",
-      description: `${selectedRequest.title} has been rejected.`,
-    })
+      const updatedRequests = eventRequests.map((req) =>
+        req.id === selectedRequest.id ? { ...req, status: "rejected" as const, feedback: rejectionFeedback } : req,
+      )
+      setEventRequests(updatedRequests)
+      setIsRejectDialogOpen(false)
+      setSelectedRequest(null)
+
+      toast({
+        title: "Event request rejected",
+        description: `${selectedRequest.title} has been rejected.`,
+      })
+    } catch (error) {
+      console.error("Error rejecting event request:", error)
+      toast({
+        title: "Error",
+        description: "Failed to reject event request",
+        variant: "destructive",
+      })
+    }
   }
 
   const getStatusBadgeClass = (status: string) => {
@@ -417,6 +583,14 @@ export default function AdminDashboard() {
   }
 
   const pendingRequestsCount = eventRequests.filter((req) => req.status === "pending").length
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tct-magenta"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -1190,7 +1364,8 @@ export default function AdminDashboard() {
               <div className="flex items-center p-4 border rounded-md bg-green-50">
                 <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
                 <p className="text-sm text-green-600">
-                  This event will be immediately visible to users and tickets will be available for purchase.
+                  This event will be immediately visible to users and tickets will be available for purchase. A 5%
+                  platform fee will be applied to all ticket sales.
                 </p>
               </div>
             </div>
@@ -1199,8 +1374,15 @@ export default function AdminDashboard() {
             <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-green-600 hover:bg-green-700" onClick={handleApproveRequest}>
-              Approve Event
+            <Button className="bg-green-600 hover:bg-green-700" onClick={handleApproveRequest} disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Processing...
+                </>
+              ) : (
+                <>Approve Event</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

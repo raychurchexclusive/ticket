@@ -3,19 +3,83 @@
 import { useState, useEffect } from "react"
 import {
   collection,
-  doc,
-  onSnapshot,
   query,
   where,
   orderBy,
   limit,
-  type Query,
+  onSnapshot,
+  type WhereFilterOp,
   type DocumentData,
+  type QueryConstraint,
+  doc,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
-// Hook for a single document
-export function useRealtimeDocument<T = DocumentData>(collectionName: string, documentId: string | null) {
+type WhereClause = [string, WhereFilterOp, any]
+type OrderByClause = [string, ("asc" | "desc")?]
+
+interface QueryOptions {
+  where?: WhereClause[]
+  orderBy?: OrderByClause[]
+  limit?: number
+}
+
+export function useRealtimeCollection<T = DocumentData>(collectionName: string, options: QueryOptions = {}) {
+  const [data, setData] = useState<T[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    const constraints: QueryConstraint[] = []
+
+    // Add where clauses
+    if (options.where) {
+      options.where.forEach((whereClause) => {
+        if (whereClause[2] !== undefined && whereClause[2] !== "") {
+          constraints.push(where(whereClause[0], whereClause[1], whereClause[2]))
+        }
+      })
+    }
+
+    // Add orderBy clauses
+    if (options.orderBy) {
+      options.orderBy.forEach((orderByClause) => {
+        constraints.push(orderBy(orderByClause[0], orderByClause[1] || "asc"))
+      })
+    }
+
+    // Add limit
+    if (options.limit) {
+      constraints.push(limit(options.limit))
+    }
+
+    const q = query(collection(db, collectionName), ...constraints)
+
+    setLoading(true)
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const documents = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as T[]
+        setData(documents)
+        setLoading(false)
+      },
+      (err) => {
+        console.error(`Error fetching ${collectionName}:`, err)
+        setError(err)
+        setLoading(false)
+      },
+    )
+
+    return () => unsubscribe()
+  }, [collectionName, JSON.stringify(options)])
+
+  return { data, loading, error }
+}
+
+export function useRealtimeDocument<T = DocumentData>(collectionName: string, documentId: string) {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -24,24 +88,23 @@ export function useRealtimeDocument<T = DocumentData>(collectionName: string, do
     if (!documentId) {
       setData(null)
       setLoading(false)
-      return
+      return () => {}
     }
 
     setLoading(true)
     const docRef = doc(db, collectionName, documentId)
-
     const unsubscribe = onSnapshot(
       docRef,
-      (doc) => {
-        if (doc.exists()) {
-          setData({ id: doc.id, ...doc.data() } as T)
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setData({ id: snapshot.id, ...snapshot.data() } as T)
         } else {
           setData(null)
         }
         setLoading(false)
       },
       (err) => {
-        console.error(`Error getting document from ${collectionName}:`, err)
+        console.error(`Error fetching document ${documentId}:`, err)
         setError(err)
         setLoading(false)
       },
@@ -49,62 +112,6 @@ export function useRealtimeDocument<T = DocumentData>(collectionName: string, do
 
     return () => unsubscribe()
   }, [collectionName, documentId])
-
-  return { data, loading, error }
-}
-
-// Hook for a collection with query
-export function useRealtimeCollection<T = DocumentData>(
-  collectionName: string,
-  queryConstraints: {
-    where?: [string, "==" | "!=" | ">" | ">=" | "<" | "<=", any][]
-    orderBy?: [string, "asc" | "desc"][]
-    limit?: number
-  } = {},
-) {
-  const [data, setData] = useState<T[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    setLoading(true)
-    let q: Query = collection(db, collectionName)
-
-    // Apply where clauses
-    if (queryConstraints.where) {
-      queryConstraints.where.forEach((constraint) => {
-        q = query(q, where(constraint[0], constraint[1], constraint[2]))
-      })
-    }
-
-    // Apply orderBy clauses
-    if (queryConstraints.orderBy) {
-      queryConstraints.orderBy.forEach((constraint) => {
-        q = query(q, orderBy(constraint[0], constraint[1]))
-      })
-    }
-
-    // Apply limit
-    if (queryConstraints.limit) {
-      q = query(q, limit(queryConstraints.limit))
-    }
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as T)
-        setData(documents)
-        setLoading(false)
-      },
-      (err) => {
-        console.error(`Error getting collection ${collectionName}:`, err)
-        setError(err)
-        setLoading(false)
-      },
-    )
-
-    return () => unsubscribe()
-  }, [collectionName, JSON.stringify(queryConstraints)])
 
   return { data, loading, error }
 }
